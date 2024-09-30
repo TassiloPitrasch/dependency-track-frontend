@@ -368,7 +368,6 @@ export default {
           swidTagId: this.project.swidTagId,
           copyright: this.project.copyright,
           tags: tagsNode,
-          active: true,
           isLatest: this.project.isLatest,
         })
         .then((response) => {
@@ -429,7 +428,7 @@ export default {
     asyncFind: function (query) {
       if (query) {
         this.isLoading = true;
-        let url = `${this.$api.BASE_URL}/${this.$api.URL_PROJECT}?searchText=${query}&excludeInactive=true`;
+        let url = `${this.$api.BASE_URL}/${this.$api.URL_PROJECT}?searchText=${query}&enhancedStatus=IN_DEVELOPMENT&enhancedStatus=IN_PRODUCTION`;
         this.axios.get(url).then((response) => {
           if (response.data) {
             this.availableParents = response.data;
