@@ -1,16 +1,27 @@
 <template>
   <div>
     <div id="projectsToolbar" class="bs-table-custom-toolbar">
-      <c-switch
-        style="margin-left: 1rem; margin-right: 0.5rem"
-        id="showInactiveProjects"
-        color="primary"
-        v-model="showInactiveProjects"
-        label
-        v-bind="labelIcon"
-      /><span class="text-muted">{{
-        $t('message.show_inactive_projects')
-      }}</span>
+      <span>
+        <multiselect
+          id="filterEnhancedStatus"
+          v-model="filterEnhancedStatus"
+          :options="optionsEnhancedStatus"
+          :multiple="true"
+          :close-on-select="false"
+          :clear-on-select="false"
+          :preserve-search="true"
+          :searchable="false"
+          :size=3
+          :allow-empty="false"
+          :style="{width: '110%'}"
+          v-bind:placeholder="$t('message.filter_enhanced_status')"
+          selectLabel
+          selectedLabel
+          deselectLabel
+          track-by="name"
+          label="name"
+        />
+      </span>
     </div>
     <bootstrap-table
       ref="table"
@@ -27,20 +38,27 @@
 <script>
 import xssFilters from 'xss-filters';
 import permissionsMixin from '../../../mixins/permissionsMixin';
-import { Switch as cSwitch } from '@coreui/vue';
+import { Multiselect } from 'vue-multiselect';
 
 export default {
   mixins: [permissionsMixin],
   components: {
-    cSwitch,
+    Multiselect
   },
   beforeCreate() {
-    this.showInactiveProjects =
-      localStorage &&
-      localStorage.getItem('AffectedProjectListShowInactiveProjects') !== null
-        ? localStorage.getItem('AffectedProjectListShowInactiveProjects') ===
-          'true'
-        : false;
+    try {
+      let storedFilter = JSON.parse(localStorage.getItem('ProjectListFilterEnhancedStatus'));
+      for (let filter of storedFilter) {
+          if (! ["Archived", "In Production", "In Development"].includes(filter.name) || ! ["ARCHIVED", "IN_PRODUCTION", "IN_DEVELOPMENT"].includes(filter.value)) {
+             throw new Error();
+          }
+      }
+      this.filterEnhancedStatus = storedFilter;
+    }
+    catch (error) {
+      this.filterEnhancedStatus = [{"name": "In Development", "value": "IN_DEVELOPMENT"}];
+      localStorage.setItem('ProjectListFilterEnhancedStatus', JSON.stringify(this.filterEnhancedStatus),);
+    }
   },
   props: {
     source: String,
@@ -49,7 +67,11 @@ export default {
   },
   data() {
     return {
-      showInactiveProjects: this.showInactiveProjects,
+      filterEnhancedStatus: this.filterEnhancedStatus,
+      optionsEnhancedStatus: [
+        {name: this.$t('message.in_development'), value: "IN_DEVELOPMENT"},
+        {name: this.$t('message.in_production'), value: "IN_PRODUCTION"},
+        {name: this.$t('message.archived'), value: "ARCHIVED"}],
       labelIcon: {
         dataOn: '\u2713',
         dataOff: '\u2715',
@@ -88,13 +110,15 @@ export default {
           sortable: true,
         },
         {
-          title: this.$t('message.active'),
-          field: 'active',
-          formatter(value) {
-            return value === true ? '<i class="fa fa-check-square-o" />' : '';
+          title: this.$t('message.enhanced_status'),
+          field: 'enhancedStatus',
+          optionsFunc: () => this.optionsEnhancedStatus, // Injecting $optionsEnhancedStatus directly does not work
+          formatter(value, row, index) {
+            const optionsEnhancedStatus = this.optionsFunc();
+            let enhancedStatus = optionsEnhancedStatus.find(({ value }) => value === row.enhancedStatus);
+            return enhancedStatus === undefined ? "-" : enhancedStatus.name;
           },
-          align: 'center',
-          sortable: true,
+          sortable: true
         },
       ],
       data: [],
@@ -118,12 +142,8 @@ export default {
   },
   methods: {
     apiUrl: function () {
-      let url = `${this.$api.BASE_URL}/${this.$api.URL_VULNERABILITY}/source/${this.source}/vuln/${encodeURIComponent(this.vulnId)}/projects`;
-      if (this.showInactiveProjects === undefined) {
-        url += '?excludeInactive=true';
-      } else {
-        url += '?excludeInactive=' + !this.showInactiveProjects;
-      }
+      let statusFilterURL = this.filterEnhancedStatus.map(status => 'enhancedStatus=' + status.value).join("&");
+      let url = `${this.$api.BASE_URL}/${this.$api.URL_VULNERABILITY}/source/${this.source}/vuln/${encodeURIComponent(this.vulnId)}/projects?${statusFilterURL}`;
       return url;
     },
     tableLoaded: function (array) {
@@ -141,11 +161,11 @@ export default {
     },
   },
   watch: {
-    showInactiveProjects() {
+    filterEnhancedStatus() {
       if (localStorage) {
         localStorage.setItem(
-          'AffectedProjectListShowInactiveProjects',
-          this.showInactiveProjects.toString(),
+          'ProjectListFilterEnhancedStatus',
+           JSON.stringify(this.filterEnhancedStatus),
         );
       }
       this.$refs.table.showLoading();

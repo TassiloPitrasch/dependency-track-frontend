@@ -39,23 +39,45 @@
                         ></i
                       ></a>
                       <ul class="dropdown-menu">
-                        <span v-for="projectVersion in activeProjectVersions">
-                          <b-dropdown-item
-                            :to="{
-                              name: 'Project',
-                              params: { uuid: projectVersion.uuid },
-                            }"
-                          >
-                            {{ projectVersion.version }}
-                          </b-dropdown-item>
-                        </span>
+                         <b-dropdown-group
+                          v-if="projectVersionsInDevelopment.length > 0"
+                          :header="$t('message.versions_in_development')"
+                        >
+                          <span v-for="projectVersion in projectVersionsInDevelopment">
+                            <b-dropdown-item
+                              :to="{
+                                name: 'Project',
+                                params: { uuid: projectVersion.uuid },
+                              }"
+                            >
+                              {{ projectVersion.version }}
+                            </b-dropdown-item>
+                          </span>
+                        </b-dropdown-group>
+
+                         <b-dropdown-group
+                          v-if="projectVersionsInProduction.length > 0"
+                          :header="$t('message.versions_in_production')"
+                        >
+                          <span v-for="projectVersion in projectVersionsInProduction">
+                            <b-dropdown-item
+                              :to="{
+                                name: 'Project',
+                                params: { uuid: projectVersion.uuid },
+                              }"
+                            >
+                              {{ projectVersion.version }}
+                            </b-dropdown-item>
+                          </span>
+                        </b-dropdown-group>
 
                         <b-dropdown-group
-                          v-if="inactiveProjectVersions.length > 0"
+                          v-if="archivedProjectVersions.length > 0"
                           :header="$t('message.inactive_versions')"
                         >
                           <span
-                            v-for="projectVersion in inactiveProjectVersions"
+
+                            v-for="projectVersion in archivedProjectVersions"
                           >
                             <b-dropdown-item
                               :to="{
@@ -79,8 +101,14 @@
                     }"
                   ></i>
                 </b-col>
-                <b-badge v-if="!this.project.active" :variant="'tab-warn'">
-                  {{ $t('message.inactive').toUpperCase() }}
+                <b-badge v-if="this.project.enhancedStatus === 'IN_DEVELOPMENT'" :variant="'tab-info'">
+                  {{ $t('message.in_development').toUpperCase() }}
+                </b-badge>
+                <b-badge v-else-if="this.project.enhancedStatus === 'IN_PRODUCTION'" :variant="'tab-info'">
+                  {{ $t('message.in_production').toUpperCase() }}
+                </b-badge>
+                <b-badge v-else-if="this.project.enhancedStatus === 'ARCHIVED'" :variant="'tab-warn'">
+                  {{ $t('message.archived').toUpperCase() }}
                 </b-badge>
                 <b-badge v-if="this.project.isLatest" :variant="'tab-info'">
                   {{ $t('message.latest_version').toUpperCase() }}
@@ -451,11 +479,14 @@ export default {
         return this.project.name;
       }
     },
-    activeProjectVersions() {
-      return this.project.versions.filter((version) => version.active);
+    projectVersionsInDevelopment() {
+      return this.project.versions.filter((version) => version.enhancedStatus === "IN_DEVELOPMENT");
     },
-    inactiveProjectVersions() {
-      return this.project.versions.filter((version) => !version.active);
+    projectVersionsInProduction() {
+      return this.project.versions.filter((version) => version.enhancedStatus === "IN_PRODUCTION");
+    },
+    archivedProjectVersions() {
+      return this.project.versions.filter((version) => version.enhancedStatus === "ARCHIVED");
     },
   },
   data() {

@@ -7,16 +7,25 @@
     :title="$t('admin.select_project')"
   >
     <div id="projectsToolbar" class="bs-table-custom-toolbar">
-      <c-switch
-        style="margin-left: 1rem; margin-right: 0.5rem"
-        id="showInactiveProjects"
-        color="primary"
-        v-model="showInactiveProjects"
-        label
-        v-bind="labelIcon"
-      /><span class="text-muted">{{
-        $t('message.show_inactive_projects')
-      }}</span>
+        <multiselect
+          id="filterEnhancedStatus"
+          v-model="filterEnhancedStatus"
+          :options="optionsEnhancedStatus"
+          :multiple="true"
+          :close-on-select="false"
+          :clear-on-select="false"
+          :preserve-search="true"
+          :searchable="false"
+          :size=3
+          :allow-empty="false"
+          :style="{ width: '110%' }"
+          v-bind:placeholder="$t('message.filter_enhanced_status')"
+          selectLabel
+          selectedLabel
+          deselectLabel
+          track-by="name"
+          label="name"
+        />
     </div>
     <bootstrap-table
       ref="table"
@@ -44,19 +53,40 @@ import xssFilters from 'xss-filters';
 import permissionsMixin from '../../../mixins/permissionsMixin';
 import common from '../../../shared/common';
 import { Switch as cSwitch } from '@coreui/vue';
+import { Multiselect } from 'vue-multiselect';
 import router from '@/router';
 
 export default {
   mixins: [permissionsMixin],
   components: {
     cSwitch,
+    Multiselect
   },
   props: {
     teamUuid: String,
   },
+  beforeCreate () {
+    try {
+      let storedFilter = JSON.parse(localStorage.getItem('ProjectListFilterEnhancedStatus'));
+      for (let filter of storedFilter) {
+          if (! ["Archived", "In Production", "In Development"].includes(filter.name) || ! ["ARCHIVED", "IN_PRODUCTION", "IN_DEVELOPMENT"].includes(filter.value)) {
+             throw new Error();
+          }
+      }
+      this.filterEnhancedStatus = storedFilter;
+    }
+    catch (error) {
+      this.filterEnhancedStatus = [{"name": "In Development", "value": "IN_DEVELOPMENT"}];
+      localStorage.setItem('ProjectListFilterEnhancedStatus', JSON.stringify(this.filterEnhancedStatus),);
+    }
+  },
   data() {
     return {
-      showInactiveProjects: false,
+      filterEnhancedStatus: this.filterEnhancedStatus,
+      optionsEnhancedStatus: [
+        {name: this.$t('message.in_development'), value: "IN_DEVELOPMENT"},
+        {name: this.$t('message.in_production'), value: "IN_PRODUCTION"},
+        {name: this.$t('message.archived'), value: "ARCHIVED"}],
       labelIcon: {
         dataOn: '\u2713',
         dataOff: '\u2715',
@@ -88,6 +118,17 @@ export default {
             return xssFilters.inHTMLData(common.valueWithDefault(value, ''));
           },
         },
+        {
+          title: this.$t('message.enhanced_status'),
+          field: 'enhancedStatus',
+          optionsFunc: () => this.optionsEnhancedStatus, // Injecting $optionsEnhancedStatus directly does not work
+          formatter(value, row, index) {
+            const optionsEnhancedStatus = this.optionsFunc();
+            let enhancedStatus = optionsEnhancedStatus.find(({ value }) => value === row.enhancedStatus);
+            return enhancedStatus === undefined ? "-" : enhancedStatus.name;
+          },
+          sortable: true
+        },
       ],
       data: [],
       options: {
@@ -115,11 +156,7 @@ export default {
   methods: {
     apiUrl: function () {
       let url = `${this.$api.BASE_URL}/${this.$api.URL_PROJECT}?notAssignedToTeamWithUuid=${this.teamUuid}`;
-      if (this.showInactiveProjects === undefined) {
-        url += '&excludeInactive=true';
-      } else {
-        url += '&excludeInactive=' + !this.showInactiveProjects;
-      }
+      this.filterEnhancedStatus.forEach(status => url += ('&enhancedStatus=' + status.value));
       return url;
     },
     refreshTable: function () {
@@ -130,7 +167,14 @@ export default {
     },
   },
   watch: {
-    showInactiveProjects() {
+    // TODO: Might need a refresh/reload of stored options if shown again, as filter can be changed in the modals of other projects
+    filterEnhancedStatus() {
+      if (localStorage) {
+        localStorage.setItem(
+          'ProjectListFilterEnhancedStatus',
+           JSON.stringify(this.filterEnhancedStatus),
+        );
+      }
       this.refreshTable();
     },
   },

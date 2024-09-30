@@ -419,6 +419,10 @@ td a.detail-icon {
   color: #bfcfdf;
 }
 
+.multiselect--inactive {
+  color: #00ff00;
+}
+
 .multiselect__input,
 .multiselect__single {
   background: $grey-650;
@@ -447,6 +451,22 @@ td a.detail-icon {
 .multiselect__select:before {
   border-color: #2f353a transparent;
   z-index: 51;
+}
+
+.multiselect--disabled {
+  background: transparent;
+  pointer-events: none;
+  opacity: .6;
+}
+
+.multiselect--disabled .multiselect__current,
+.multiselect--disabled .multiselect__select {
+  background: transparent;
+}
+
+.multiselect--disabled .multiselect__select,
+.multiselect--disabled .multiselect__select:before {
+  border-color: #2f353a transparent;
 }
 
 .multiselect__placeholder {
