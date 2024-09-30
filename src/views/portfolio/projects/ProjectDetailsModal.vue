@@ -142,16 +142,16 @@
               :readonly="this.isNotPermitted(PERMISSIONS.PORTFOLIO_MANAGEMENT)"
             />
           </b-form-group>
-          <b-input-group-form-switch
-            id="project-details-active"
-            :label-on="$t('message.active')"
-            :label-off="$t('message.inactive')"
-            v-model="project.active"
-            :tooltip="$t('message.inactive_active_children')"
-            :disabled="
-              this.isNotPermitted(PERMISSIONS.PORTFOLIO_MANAGEMENT) ||
-              (project.active && this.hasActiveChild(project))
-            "
+          <b-input-group-form-select
+            id="v-enhanced-status-input"
+            lazy="true"
+            required="true"
+            feedback="true"
+            v-model="project.enhancedStatus"
+            :label="$t('message.enhanced_status')"
+            :options="(this.isActive(this.project) && this.hasActiveChild(this.project)) ? availableEnhancedStatusNoArchived : availableEnhancedStatusFull"
+            :tooltip="$t('message.enhanced_status_desc')"
+            :readonly="this.isNotPermitted(PERMISSIONS.PORTFOLIO_MANAGEMENT)"
           />
           <p></p>
           <b-input-group-form-input
@@ -500,7 +500,6 @@ export default {
     availableCollectionLogicsMixin,
   ],
   components: {
-    BInputGroupFormSwitch,
     BInputGroupFormInput,
     BInputGroupFormSelect,
     VueTagsInput,
@@ -672,6 +671,13 @@ export default {
       }
       this.$root.$emit('bv::show::modal', 'projectDetailsModal');
     });
+    this.availableEnhancedStatusMinimum =
+      [{ value: "IN_DEVELOPMENT", text: this.$i18n.t('message.in_development') },
+      { value: "IN_PRODUCTION", text: this.$i18n.t('message.in_production') }];
+    this.availableEnhancedStatusFull = this.availableEnhancedStatusMinimum.concat(
+      [{ value: "ARCHIVED", text: this.$i18n.t('message.archived'), disabled: false }]);
+    this.availableEnhancedStatusNoArchived = this.availableEnhancedStatusMinimum.concat(
+      [{ value: "ARCHIVED", text: this.$i18n.t('message.archived'), disabled: true }]);
   },
   watch: {
     tag: 'searchTags',
@@ -725,7 +731,7 @@ export default {
           purl: this.project.purl,
           swidTagId: this.project.swidTagId,
           tags: tagsNode,
-          active: this.project.active,
+          enhancedStatus: this.project.enhancedStatus,
           isLatest: this.project.isLatest,
           externalReferences: this.project.externalReferences,
         })
@@ -763,11 +769,17 @@ export default {
           });
       }
     },
+    isActive: function (project) {
+      return project.enhancedStatus != "ARCHIVED";
+    },
+    isActive: function (project) {
+      return project.enhancedStatus != "ARCHIVED";
+    },
     hasActiveChild: function (project) {
       return (
         project.children &&
         project.children.some((child) => {
-          return child.active || this.hasActiveChild(child);
+          return this.isActive(child) || this.hasActiveChild(child);
         })
       );
     },
@@ -781,7 +793,7 @@ export default {
     asyncFind: function (query) {
       if (query) {
         this.isLoading = true;
-        let url = `${this.$api.BASE_URL}/${this.$api.URL_PROJECT}/withoutDescendantsOf/${this.uuid}?searchText=${query}&excludeInactive=true`;
+        let url = `${this.$api.BASE_URL}/${this.$api.URL_PROJECT}/withoutDescendantsOf/${this.uuid}?searchText=${query}&enhancedStatus=IN_DEVELOPMENT&enhancedStatus=IN_PRODUCTION`;
         this.axios.get(url).then((response) => {
           if (response.data) {
             this.availableParents = response.data;
