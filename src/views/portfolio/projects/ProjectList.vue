@@ -1,7 +1,7 @@
 <template>
   <div class="animated fadeIn" v-permission="'VIEW_PORTFOLIO'">
     <portfolio-widget-row :fetch="true" />
-    <div id="projectsToolbar" class="bs-table-custom-toolbar">
+    <div id="projectsToolbar" class="bs-table-custom-toolbar" style="width:105%">
       <b-button
         size="md"
         variant="outline-primary"
@@ -10,16 +10,6 @@
       >
         <span class="fa fa-plus"></span> {{ $t('message.create_project') }}
       </b-button>
-      <c-switch
-        style="margin-left: 1rem; margin-right: 0.5rem"
-        id="showInactiveProjects"
-        color="primary"
-        v-model="showInactiveProjects"
-        label
-        v-bind="labelIcon"
-      /><span class="text-muted">{{
-        $t('message.show_inactive_projects')
-      }}</span>
       <c-switch
         @click.native="saveViewState"
         style="margin-left: 1rem; margin-right: 0.5rem"
@@ -32,6 +22,27 @@
         v-b-tooltip.hover
         :title="$t('message.switch_view')"
       /><span class="text-muted">{{ $t('message.show_flat_view') }}</span>
+      <span>
+        <multiselect
+          id="filterEnhancedStatus"
+          v-model="filterEnhancedStatus"
+          :options="optionsEnhancedStatus"
+          :multiple="true"
+          :close-on-select="false"
+          :clear-on-select="false"
+          :preserve-search="true"
+          :searchable="false"
+          :disabled="isSearching"
+          :size=3
+          :allow-empty="false"
+          v-bind:placeholder="$t('message.filter_enhanced_status')"
+          selectLabel
+          selectedLabel
+          deselectLabel
+          track-by="name"
+          label="name"
+        />
+      </span>
     </div>
     <bootstrap-table
       ref="table"
@@ -52,6 +63,7 @@ import { loadUserPreferencesForBootstrapTable } from '@/shared/utils';
 import { Switch as cSwitch } from '@coreui/vue';
 import MurmurHash2 from 'imurmurhash';
 import Vue from 'vue';
+import { Multiselect } from 'vue-multiselect';
 import xssFilters from 'xss-filters';
 import permissionsMixin from '../../../mixins/permissionsMixin';
 import routerMixin from '../../../mixins/routerMixin';
@@ -67,17 +79,26 @@ export default {
     cSwitch,
     ProjectCreateProjectModal,
     PortfolioWidgetRow,
+    Multiselect
   },
   beforeCreate() {
-    this.showInactiveProjects =
-      localStorage &&
-      localStorage.getItem('ProjectListShowInactiveProjects') !== null
-        ? localStorage.getItem('ProjectListShowInactiveProjects') === 'true'
-        : false;
     this.showFlatView =
       localStorage && localStorage.getItem('ProjectListShowFlatView') !== null
         ? localStorage.getItem('ProjectListShowFlatView') === 'true'
         : false;
+    try {
+      let storedFilter = JSON.parse(localStorage.getItem('ProjectListFilterEnhancedStatus'));
+      for (let filter of storedFilter) {
+          if (! ["Archived", "In Production", "In Development"].includes(filter.name) || ! ["ARCHIVED", "IN_PRODUCTION", "IN_DEVELOPMENT"].includes(filter.value)) {
+             throw new Error();
+          }
+      }
+      this.filterEnhancedStatus = storedFilter;
+    }
+    catch (error) {
+      this.filterEnhancedStatus = [{"name": "In Development", "value": "IN_DEVELOPMENT"}];
+      localStorage.setItem('ProjectListFilterEnhancedStatus', JSON.stringify(this.filterEnhancedStatus),);
+    }
   },
   methods: {
     initializeProjectCreateProjectModal: function () {
@@ -96,20 +117,16 @@ export default {
       if (classifier) {
         url += '/classifier/' + encodeURIComponent(classifier);
       }
-      if (this.showInactiveProjects === undefined) {
-        url += '?excludeInactive=true';
-      } else {
-        url += '?excludeInactive=' + !this.showInactiveProjects;
-      }
       if (this.isSearching) {
-        url += '&onlyRoot=false';
+        url += '?onlyRoot=false';
       } else {
         if (this.showFlatView === undefined) {
-          url += '&onlyRoot=true';
+          url += '?onlyRoot=true';
         } else {
-          url += '&onlyRoot=' + !this.showFlatView;
+          url += '?onlyRoot=' + !this.showFlatView;
         }
       }
+      this.filterEnhancedStatus.forEach(status => url += ('&enhancedStatus=' + status.value));
       return url;
     },
     refreshTable: function () {
@@ -145,8 +162,6 @@ export default {
           if (
             project.children &&
             !project.fetchedChildren &&
-            (this.showInactiveProjects ||
-              project.children.some((child) => child.active)) &&
             (!this.$route.query.classifier ||
               project.children.some(
                 (child) => child.classifier === this.$route.query.classifier,
@@ -201,22 +216,21 @@ export default {
     $route(to, from) {
       this.refreshTable();
     },
-    showInactiveProjects() {
-      if (localStorage) {
-        localStorage.setItem(
-          'ProjectListShowInactiveProjects',
-          this.showInactiveProjects.toString(),
-        );
-      }
-      this.$refs.table.showLoading();
-      this.currentPage = 1;
-      this.refreshTable();
-    },
     showFlatView() {
       if (localStorage) {
         localStorage.setItem(
           'ProjectListShowFlatView',
           this.showFlatView.toString(),
+        );
+      }
+      this.$refs.table.showLoading();
+      this.refreshTable();
+    },
+    filterEnhancedStatus() {
+      if (localStorage) {
+        localStorage.setItem(
+          'ProjectListFilterEnhancedStatus',
+           JSON.stringify(this.filterEnhancedStatus),
         );
       }
       this.$refs.table.showLoading();
@@ -228,8 +242,12 @@ export default {
   },
   data() {
     return {
-      showInactiveProjects: this.showInactiveProjects,
       showFlatView: this.showFlatView,
+      filterEnhancedStatus: this.filterEnhancedStatus,
+      optionsEnhancedStatus: [
+        {name: this.$t('message.in_development'), value: "IN_DEVELOPMENT"},
+        {name: this.$t('message.in_production'), value: "IN_PRODUCTION"},
+        {name: this.$t('message.archived'), value: "ARCHIVED"}],
       isSearching: false,
       savedViewState: null,
       labelIcon: {
@@ -318,13 +336,15 @@ export default {
           sortable: true,
         },
         {
-          title: this.$t('message.active'),
-          field: 'active',
+          title: this.$t('message.enhanced_status'),
+          field: 'enhancedStatus',
+          optionsFunc: () => this.optionsEnhancedStatus, // Injecting $optionsEnhancedStatus directly does not work
           formatter(value, row, index) {
-            return value === true ? '<i class="fa fa-check-square-o" />' : '';
+            const optionsEnhancedStatus = this.optionsFunc();
+            let enhancedStatus = optionsEnhancedStatus.find(({ value }) => value === row.enhancedStatus);
+            return enhancedStatus === undefined ? "-" : enhancedStatus.name;
           },
-          align: 'center',
-          sortable: true,
+          sortable: true
         },
         {
           title: this.$t('message.components'),
@@ -425,8 +445,6 @@ export default {
               $element.treegrid('isLeaf') &&
               row.children &&
               !row.fetchedChildren &&
-              (this.showInactiveProjects ||
-                row.children.some((child) => child.active)) &&
               (!this.$route.query.classifier ||
                 row.children.some(
                   (child) => child.classifier === this.$route.query.classifier,

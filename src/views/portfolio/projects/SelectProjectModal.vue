@@ -38,11 +38,6 @@ export default {
   methods: {
     apiUrl: function () {
       let url = `${this.$api.BASE_URL}/${this.$api.URL_PROJECT}`;
-      if (this.showInactiveProjects === undefined) {
-        url += '?excludeInactive=true';
-      } else {
-        url += '?excludeInactive=' + !this.showInactiveProjects;
-      }
       return url;
     },
     refreshTable: function () {
@@ -53,14 +48,12 @@ export default {
       });
     },
   },
-  watch: {
-    showInactiveProjects() {
-      this.refreshTable();
-    },
-  },
   data() {
     return {
-      showInactiveProjects: false,
+      optionsEnhancedStatus: [
+        {name: this.$t('message.in_development'), value: "IN_DEVELOPMENT"},
+        {name: this.$t('message.in_production'), value: "IN_PRODUCTION"},
+        {name: this.$t('message.archived'), value: "ARCHIVED"}],
       labelIcon: {
         dataOn: '\u2713',
         dataOff: '\u2715',
@@ -88,10 +81,13 @@ export default {
           },
         },
         {
-          title: this.$t('message.active'),
-          field: 'active',
+          title: this.$t('message.enhanced_status'),
+          field: 'enhancedStatus',
+          optionsFunc: () => this.optionsEnhancedStatus, // Injecting $optionsEnhancedStatus directly does not work
           formatter(value, row, index) {
-            return value === true ? '<i class="fa fa-check-square-o" />' : '';
+            const optionsEnhancedStatus = this.optionsFunc();
+            let enhancedStatus = optionsEnhancedStatus.find(({ value }) => value === row.enhancedStatus);
+            return enhancedStatus === undefined ? "-" : enhancedStatus.name;
           },
           align: 'center',
           class: 'tight',
